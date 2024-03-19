@@ -1,4 +1,4 @@
-### pakkau - a lomoji to hanji Taiwanese (Hokkien) converter
+### pakkau - a lomaji to hanji Taiwanese (Hokkien) converter
 
 A test of Hidden Markov Model converter from lomaji to hanji of Taiwanese (Hokkien). still in alpha version.
 
@@ -20,19 +20,16 @@ options:
 
 #### example1:
 ``
-  python3 ./pakkau.py --form tl "Iâ-soo kóng:guá sī sè-kan ê kng"
+  python3 ./pakkau.py --form tl "Lāu-su kóng: \"ta̍k-ke tsò-hué lâi\""
 ``
-
 output:
 
-
-耶穌講：我是世間的光
+老師講："逐家做伙來"
 
 #### example2:
 ``
 python3 ./pakkau.py --genmod
 ``
-
 generate models from the .csv parallel transliteration  file in ./corpus files
 
 
