@@ -22,7 +22,9 @@ options:
 ``
   python3 ./pakkau.py --form tl "Iâ-soo kóng:guá sī sè-kan ê kng"
 ``
+
 output:
+
 
 耶穌講：我是世間的光
 
@@ -30,6 +32,7 @@ output:
 ``
 python3 ./pakkau.py --genmod
 ``
+
 generate models from the .csv parallel transliteration  file in ./corpus files
 
 
