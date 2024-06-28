@@ -1,0 +1,89 @@
+import re
+import pandas as pd
+import math
+from functools import reduce
+import argparse
+import os
+import sqlite3
+
+def genmod():
+    corpus_path = "./corpus/"
+    df_list = []
+    for file in os.listdir(corpus_path):
+        if file.endswith(".csv"):
+            df = pd.read_csv(corpus_path+file, header=0, names=['hanji', 'lomaji'])
+            df_list.append(df)
+    df = pd.concat(df_list)
+    df['lomaji'] = df['lomaji'].str.lower()
+
+    new_data = []
+
+    for index, row in df.iterrows():
+        hanji = list(filter(lambda x : re.match("[^、（）；：，。！？「」『』]", x), list(row['hanji'])))
+        tl = re.split(r'(:?[!?;,.\"\'\(\):]|[-]+|\s+)', row['lomaji'])
+        tl2 = list(filter(lambda x : re.match(r"([^\(\)^!:?; \'\",.\-\u3000])", x), tl))
+        new_data.append((hanji, tl2))
+        if (len(hanji) != len(tl2)):
+            raise ValueError(f"length of hanji {hanji} is different from romaji {tl2}.")
+
+    model_filename = "model.db"
+    try:
+        os.remove(model_filename)
+    except OSError:
+        pass
+
+    con = sqlite3.connect(model_filename)
+    cur = con.cursor()
+    cur.execute("CREATE TABLE pronounce(hanji, lomaji, freq)")
+
+    
+    char_to_pronounce = {}
+
+    for i in new_data:
+        hanji = i[0]
+        lomaji = i[1]
+        for j in range(len(i[0])):
+            if not hanji[j] in char_to_pronounce:
+                char_to_pronounce[hanji[j]] = {lomaji[j] : 1}
+            elif not lomaji[j] in char_to_pronounce[hanji[j]]:
+                char_to_pronounce[hanji[j]][lomaji[j]] = 1
+            else:
+                char_to_pronounce[hanji[j]][lomaji[j]] += 1
+
+    print(char_to_pronounce)
+
+    for i in char_to_pronounce.keys():
+        hanji =  char_to_pronounce[i]
+        for j in hanji.keys():
+            cur.execute("INSERT INTO pronounce VALUES(?, ?, ?)", (i,j, hanji[j]))
+            
+    #con.commit()
+    con.commit()
+    con.close()
+
+def convert(sentence):
+    pass
+
+parser = argparse.ArgumentParser()
+parser.add_argument('--genmod', help='generate the model', action='store_true',
+                required=False,)
+
+parser.add_argument('sentence', metavar='SENTENCE', nargs='?',
+                    help='the sentence to be converted')
+parser.add_argument('--form', metavar='FORM', choices=["poj", "tl"], nargs=1,
+                    default=['poj'],
+                    help='the orthography to be used (poj or tl). Default is poj.')
+
+args = parser.parse_args()
+print(args)
+if args.genmod == True:
+    genmod()
+elif args.sentence != None:
+    if args.form == ['poj']:
+        sentence = poj_to_tl(args.sentence)
+        print(convert(sentence))
+    else:
+        print(convert(args.sentence))
+else:
+    parser.print_help()
+

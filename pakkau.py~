@@ -7,7 +7,7 @@ import os
 import sqlite3
 from itertools import chain
 
-model_filename = os.path.join(os.path.dirname(os.path.realpath(__file__)), "model.db")
+model_filename = "model.db"
 
 def genmod():
     corpus_path = "./corpus/"
@@ -44,11 +44,7 @@ def genmod():
 
     for i in new_data:
         hanji = i[0]
-        
         lomaji = i[1]
-        '''111'''
-        hanji = list(zip(hanji, lomaji))
-        hanji = list(map(lambda x : x[0] + x[1], hanji))
         for j in range(len(i[0])):
             if not hanji[j] in char_to_pronounce:
                 char_to_pronounce[hanji[j]] = {lomaji[j] : 1}
@@ -69,7 +65,7 @@ def genmod():
     
 
     for i in new_data:
-        head_hanji = i[0][0]+i[1][0]
+        head_hanji = i[0][0]
 
         if head_hanji in init_freq:
             init_freq[head_hanji] += 1
@@ -90,8 +86,7 @@ def genmod():
     cur.execute("CREATE TABLE transition(prev_char, next_char, freq)")
 
     for i in new_data:
-        hanji_tmp = list(zip(i[0],i[1]))
-        hanji = list(map(lambda x: x[0]+ x[1], hanji_tmp))
+        hanji = i[0]
         for j in range(len(i[0])-1):
             this_hanji = hanji[j]
             next_hanji = hanji[j+1]
@@ -116,6 +111,7 @@ def genmod():
 def get_homophones(pron, cur, con):
     homophones_raw = cur.execute("select hanji FROM pronounce where lomaji = ?", (pron, )).fetchall()
     homophones = list(map(lambda x: x[0], homophones_raw))
+    
     return homophones
 
 def convert(sentences):
@@ -146,7 +142,7 @@ def convert_one_sentence(sentence):
     splitted = re.split(r'(--?|\s+)', sentence)
     filtered = list(filter(lambda x :not re.match(r'(--?|\s+)', x), splitted))
     small_capized = list(map(lambda x : x.lower(), filtered))
-    
+    print("======", small_capized)
     con = sqlite3.connect(model_filename)
     cur = con.cursor()
 
@@ -175,14 +171,14 @@ def convert_one_sentence(sentence):
 
         for i in homophones_sequence[0]:
             i_freq = cur.execute('''select initial.freq FROM initial 
-    WHERE initial.char = ?''', (i['char'],)).fetchall()[0][0]
+    WHERE initial.char = ?''', (i['char'])).fetchall()[0][0]
 
             i['prob'] = i_freq / head_freq_total
-    
+            print(i)
     
     #for i in homophones_sequence[0]:
         
-    
+    print("+++++", return_result)
 
     if len(small_capized) == 1:
         max_prob = -math.inf
@@ -236,18 +232,18 @@ inner join pronounce as p2
 on p.hanji = p2.hanji where p2.lomaji = ?''', (small_capized[i],)).fetchall()[0][0]#分母
                             #分子
                             num = cur.execute(''' SELECT sum(freq) FROM pronounce as p  where hanji = ?''', (j["char"],)).fetchall()[0][0]
-                            
+                            print("+++", num, den)
                             k_to_j_freq = num/den * (1-weight)
 
                         else:
                             num = k_to_j_freq_raw[0][0]
                             don = total_transition_freq
                             k_to_j_freq =num/don * weight
-                        
+                        print("k_to_j_fr", k["char"], j["char"], k_to_j_freq)
                         if k_to_j_freq * k["prob"] > max_prob:
                             max_prob = k_to_j_freq * k["prob"]
                             prev_char = k["char"]
-                    
+                    print("~-~_~-~-~-~-", prev_char, j["char"], max_prob)
                     j["prob"] = max_prob
                     j["prev_char"] = prev_char
 
@@ -260,22 +256,20 @@ on p.hanji = p2.hanji where p2.lomaji = ?''', (small_capized[i],)).fetchall()[0]
             current = i["char"]
             prev_char = i["prev_char"]
 
-    
-    
+    print("~tail~~", current)
+    print(homophones_sequence)
     return_result[len(homophones_sequence)-1] = current
 
     for i in range(len(homophones_sequence)-2, -1, -1):
         current_ls = list(filter(lambda x : x["char"] == prev_char,
                               homophones_sequence[i]))
-        
+        print(prev_char)
         return_result[i] = prev_char
         current = current_ls[0]["char"]
         prev_char = current_ls[0]["prev_char"]
 
-    return_result = list(filter(lambda x : x != "", return_result))
-    return_result = list(map(lambda x : x[0] if re.match(u'[⺀-⺙⺛-⻳⼀-⿕々〇〡-〩〸-〺〻㐀-䶵一-鿃豈-鶴侮-頻並-龎𪜀-\U0002b73f]', x)
-                                             else x, return_result))
 
+    print(return_result)
 
     return return_result
     

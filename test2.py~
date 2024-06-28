@@ -1,0 +1,207 @@
+import re
+import pandas as pd
+import math
+from functools import reduce
+
+df1 = pd.read_csv('教典例句.csv', header=0, names=['漢字', '羅馬字'])
+df2 = pd.read_csv('教典發音詞.csv',header=0, names=['漢字', '羅馬字'])
+
+
+df = pd.concat([df1, df2]) # combine 2 csv dataframe
+
+df['羅馬字'] = df['羅馬字'].str.lower()
+
+new_data = []
+
+for index, row in df.iterrows():
+    hanji = list(filter(lambda x : re.match("[^、（）；：，。！？「」『』]", x), list(row['漢字'])))
+    tl = re.split(r'(:?[!?;,.\"\'\(\):]|[-]+|\s+)', row['羅馬字'])
+    tl2 = list(filter(lambda x : re.match(r"([^\(\)^!:?; \'\",.\-\u3000])", x), tl))
+    new_data.append((hanji, tl2))
+    #if (len(hanji) != len(tl2)):
+        #print(tl2, hanji)
+    #print(tl2, hanji)
+
+
+# char-To-Pronounciation Prossibility dict
+
+char_to_pronounce = {}
+
+for i in new_data:
+    hanji = i[0]
+    lomaji = i[1]
+    for j in range(len(i[0])):
+        if not hanji[j] in char_to_pronounce:
+            char_to_pronounce[hanji[j]] = {lomaji[j] : 1}
+        elif not lomaji[j] in char_to_pronounce[hanji[j]]:
+            char_to_pronounce[hanji[j]][lomaji[j]] = 1
+        else:
+            char_to_pronounce[hanji[j]][lomaji[j]] += 1
+
+for char, char_reading in char_to_pronounce.items():
+    total_count = reduce((lambda x, y : x + y), list(char_reading.values()))
+
+    for i in char_reading.keys():
+        char_reading[i] = char_reading[i] / float(total_count)
+
+#print(char_to_pronounce)
+
+all_chars = char_to_pronounce.keys()
+
+'''{'提': 45, '宋': 7, '完': 18, '刻': 7, '局': 9,
+ '巡': 8, '畫': 25, '青': 56, '尪': 13}'''
+init_freq = {} #詞kap句開始ê字出現次數
+
+for i in new_data:
+    head_hanji = i[0][0]
+
+    if head_hanji in init_freq:
+        init_freq[head_hanji] += 1
+    else:
+        init_freq[head_hanji] = 1
+
+#補字
+min_weight = 0.1
+
+for i in all_chars:
+    if not i in init_freq.keys():
+        init_freq[i] = 0.1
+        
+#print(init_freq)
+    
+
+
+
+# probability of P(next=c2|this=c1)
+char_transition = {}
+
+for i in new_data:
+    hanji = i[0]
+    for j in range(len(i[0])-1):
+        this_hanji = hanji[j]
+        next_hanji = hanji[j+1]
+        if not this_hanji in char_transition:
+            char_transition[this_hanji] = {next_hanji : 1}
+        elif not next_hanji in char_transition[this_hanji]:
+            char_transition[this_hanji][next_hanji] = 1
+        else:
+            char_transition[this_hanji][next_hanji] += 1
+
+#print(char_transition)
+
+#補字
+for i in all_chars:
+    if not i in char_transition.keys():
+        char_transition[i] = {}
+        for j in all_chars:
+            char_transition[i][j] = init_freq[j]
+    else:
+        pass
+
+for i in char_transition.keys():
+    for j in all_chars:
+        if not j in char_transition[i].keys():
+            char_transition[i][j] = min_weight * (0.03+math.log(init_freq[j]))
+
+
+for char, next_char in char_transition.items():
+    total_count = 0
+    [total_count := total_count + x for x in list(next_char.values())]
+
+    for i in next_char.keys():
+        next_char[i] = next_char[i] / float(total_count)
+
+
+
+
+def get_homophones(pron):
+    homophones = []
+    for i in char_to_pronounce.keys():
+        if pron in char_to_pronounce[i].keys():
+            homophones.append(i)
+        else:
+            pass
+
+    return homophones
+
+input_lomaji = ["guá", "kap", "tshit", "á", "lâi", "khì", "tâi", "tiong", "tshit", "thô", "sūn", "suà", "tsē", "ko", "thih"]
+
+char_candidates = []
+
+for i in input_lomaji:
+    homophones = list(map(lambda x : {"char": x,
+                                      "prev_char": None,
+                                      "prob" : None}, # probibility
+                          get_homophones(i)))
+    char_candidates.append(homophones)
+
+#print(char_candidates)
+def get_max_prob(input_lmj, char_cand):
+    for i in range(len(input_lmj)):
+        if i == 0:
+            for j in char_cand[i]:
+                init_freq_sum = reduce(lambda x, y : x + y,
+                                       list(
+                                           map(lambda x : init_freq[x["char"]] ,
+                                               char_cand[0])))
+                print(init_freq_sum)
+                ch = j["char"]
+                init_to_char_prob = init_freq[ch] / init_freq_sum # get the ratio
+                char_reading_prob = char_to_pronounce[ch][input_lmj[0]]
+            
+                j["prob"] = init_to_char_prob * char_reading_prob
+        
+            result = ""
+            max_num = -math.inf
+
+            for i in char_cand[0]:
+                if i["prob"] >= max_num:
+                    max_num = i["prob"]
+                    result = i["char"]
+
+            #print(result)
+        else:
+            for j in char_cand[i]:
+                prob = -math.inf
+                prev_char = ""
+                for k in char_cand[i-1]:
+                    k_prob = k["prob"]
+                    #print(k["char"], "k_prob:", k_prob)
+                    k_to_j_prob = char_transition[k["char"]][j["char"]]
+                    #print(k["char"], "->",j["char"] ,"k_to_j_prob:", k_to_j_prob)
+                    j_to_pron_prob = char_to_pronounce[j["char"]][input_lmj[i]]
+                    total_tmp_prob = k_prob * k_to_j_prob * j_to_pron_prob 
+                    if prob < total_tmp_prob:
+                        prob = total_tmp_prob
+                        prev_char = k
+
+                j["prev_char"] = prev_char["char"]
+                j["prob"] = prob
+
+    real_last_char = ""
+    prev_char = ""
+    prob = -math.inf
+    for i in char_cand[-1]:
+        if i["prob"] > prob:
+            prob = i["prob"]
+            real_last_char = i["char"]
+            prev_char = i["prev_char"]
+
+    print(real_last_char)
+
+    result_hanji = [real_last_char]
+    for i in range(len(input_lmj)-2, -1, -1):
+        current = list(filter(lambda x : x["char"] == prev_char,
+                              char_cand[i]))[0]
+        result_hanji.append(current["char"])
+        prev_char = current["prev_char"]
+        
+
+    result_hanji.reverse()
+    
+    result_hanji_string = "".join(result_hanji)
+    print("輸入ê羅馬字陣列(array)：", input_lomaji)
+    print("輸出ê漢字：", result_hanji_string)
+                
+    
+get_max_prob(input_lomaji, char_candidates)
